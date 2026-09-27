@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Downloader</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+        body {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        input {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 14px;
+            outline: none;
+            transition: border 0.3s;
+        }
+        input:focus { border-color: #667eea; }
+        button {
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        button:hover { transform: translateY(-2px); }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
+        .result {
+            margin-top: 20px;
+            padding: 20px;
+            border-radius: 10px;
+            background: #f5f5f5;
+            display: none;
+        }
+        .result.show { display: block; }
+        .result a {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 12px 24px;
+            background: #10b981;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+        }
+        .loading { display: none; margin-top: 20px; text-align: center; color: #667eea; }
+        .loading.show { display: block; }
+        .error { color: #ef4444; margin-top: 10px; }
+        .platforms {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+            font-size: 12px;
+            color: #888;
+        }
+        .platforms span {
+            padding: 5px 10px;
+            background: #f0f0f0;
+            border-radius: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎬 Video Downloader</h1>
+        <p class="subtitle">Download video dari TikTok, YouTube, Instagram, dll</p>
+
+        <div class="input-group">
+            <input type="text" id="urlInput" placeholder="Paste link video di sini...">
+            <button id="downloadBtn" onclick="download()">Download</button>
+        </div>
+
+        <div class="platforms">
+            <span>✓ TikTok</span>
+            <span>✓ YouTube</span>
+            <span>✓ Instagram</span>
+            <span>✓ Facebook</span>
+        </div>
+
+        <div class="loading" id="loading">
+            <p>⏳ Sedang memproses...</p>
+        </div>
+
+        <div class="result" id="result">
+            <p><strong>✅ Berhasil!</strong></p>
+            <p id="resultTitle"></p>
+            <a id="resultLink" href="#" target="_blank">📥 Download Video</a>
+        </div>
+
+        <p class="error" id="error"></p>
+    </div>
+
+    <script>
+        async function download() {
+            const url = document.getElementById('urlInput').value.trim();
+            const btn = document.getElementById('downloadBtn');
+            const loading = document.getElementById('loading');
+            const result = document.getElementById('result');
+            const error = document.getElementById('error');
+
+            if (!url) {
+                error.textContent = '❌ Masukkan link dulu!';
+                return;
+            }
+
+            btn.disabled = true;
+            loading.classList.add('show');
+            result.classList.remove('show');
+            error.textContent = '';
+
+            try {
+                // Ganti endpoint ini sesuai API yang Tuan punya
+                const apiUrl = 'https://sylvatica.my.id/api/download/aio?url=' + encodeURIComponent(url) + '&apikey=sylva-2b57116f727397bda36aea5add95ed8e';
+                
+                const response = await fetch(apiUrl);
+                const data = await response.json();
+
+                loading.classList.remove('show');
+
+                // Cek struktur response
+                let videoUrl = null;
+                let title = 'Video';
+
+                if (data.video) videoUrl = data.video;
+                else if (data.url) videoUrl = data.url;
+                else if (data.download) videoUrl = data.download;
+                else if (data.data && data.data.video) {
+                    videoUrl = data.data.video;
+                    title = data.data.title || title;
+                }
+
+                if (videoUrl) {
+                    document.getElementById('resultTitle').textContent = title;
+                    document.getElementById('resultLink').href = videoUrl;
+                    result.classList.add('show');
+                } else {
+                    error.textContent = '❌ Video tidak ditemukan. Coba link lain.';
+                }
+
+            } catch (err) {
+                loading.classList.remove('show');
+                error.textContent = '❌ Error: ' + err.message;
+            }
+
+            btn.disabled = false;
+        }
+    </script>
+</body>
+</html>

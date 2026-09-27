@@ -30,20 +30,23 @@ module.exports = async (req, res) => {
             }
         } catch (_) {}
 
-        // ===== OPSI 1: CONVERT1S =====
-        console.log("[YT] Mencoba Convert1s...");
+        console.log("[YT] Coba API 1: Convert1s...");
         let downloadUrl = await tryConvert1s(videoId);
 
-        // ===== OPSI 2: YTMP3.MOBI =====
         if (!downloadUrl) {
-            console.log("[YT] Convert1s gagal, fallback ke YTMP3.mobi...");
+            console.log("[YT] API 1 gagal, coba API 2: YTMP3.mobi...");
             downloadUrl = await tryYtmp3(videoId);
+        }
+
+        if (!downloadUrl) {
+            console.log("[YT] API 2 gagal, coba API 3: ytdl...");
+            downloadUrl = await tryYtdl(videoId);
         }
 
         if (!downloadUrl) {
             return res.json({
                 status: false,
-                message: 'Gagal download YouTube. Coba video lain atau cek copyright.'
+                message: 'Semua API gagal. Video mungkin kena copyright atau gak available.'
             });
         }
 
@@ -64,7 +67,7 @@ module.exports = async (req, res) => {
 };
 
 
-// ===== OPSI 1: CONVERT1S =====
+// ===== API 1: CONVERT1S =====
 async function tryConvert1s(videoId) {
     try {
         const headers = {
@@ -88,7 +91,6 @@ async function tryConvert1s(videoId) {
 
         if (!conv || conv.error || !conv.statusUrl) return null;
 
-        // Poll status
         for (let i = 0; i < 15; i++) {
             await new Promise(r => setTimeout(r, 1200));
             try {
@@ -97,20 +99,17 @@ async function tryConvert1s(videoId) {
                 if (poll && poll.status === "completed" && poll.downloadUrl) {
                     return poll.downloadUrl;
                 }
-                if (poll && (poll.status === "error" || poll.status === "failed")) {
-                    return null;
-                }
+                if (poll && (poll.status === "error" || poll.status === "failed")) return null;
             } catch (_) {}
         }
         return null;
-
     } catch (e) {
         return null;
     }
 }
 
 
-// ===== OPSI 2: YTMP3.MOBI =====
+// ===== API 2: YTMP3.MOBI =====
 async function tryYtmp3(videoId) {
     try {
         const headers = {
@@ -119,32 +118,21 @@ async function tryYtmp3(videoId) {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         };
 
-        // Step 1: Init
-        const initRes = await fetch(
-            "https://a.ymcdn.org/api/v1/init?p=y&23=1llum1n471",
-            {headers: headers}
-        );
+        const initRes = await fetch("https://a.ymcdn.org/api/v1/init?p=y&23=1llum1n471", {headers});
         const initData = await initRes.json();
-
         if (!initData || !initData.convertURL) return null;
 
-        // Step 2: Convert
-        const convRes = await fetch(
-            initData.convertURL + "&v=" + videoId + "&f=mp4",
-            {headers: headers}
-        );
+        const convRes = await fetch(initData.convertURL + "&v=" + videoId + "&f=mp4", {headers});
         const convData = await convRes.json();
-
         if (!convData || convData.error) return null;
 
-        // Step 3: Poll progress
         let finalUrl = convData.downloadURL;
         let progress = 0;
 
         for (let i = 0; i < 10; i++) {
             await new Promise(r => setTimeout(r, 2000));
             try {
-                const progRes = await fetch(convData.progressURL, {headers: headers});
+                const progRes = await fetch(convData.progressURL, {headers});
                 const progData = await progRes.json();
                 progress = progData.progress || 0;
                 if (progData.downloadURL) finalUrl = progData.downloadURL;
@@ -157,7 +145,63 @@ async function tryYtmp3(videoId) {
             return finalUrl;
         }
         return null;
+    } catch (e) {
+        return null;
+    }
+}
 
+
+// ===== API 3: ytdl (fallback terakhir) =====
+async function tryYtdl(videoId) {
+    try {
+        // Coba pake API publik lain (contoh: y2mate-like API)
+        const headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Content-Type": "application/json",
+        };
+
+        // API publik 1: ytmp3.cc
+        try {
+            const r1 = await fetch("https://ytmp3.cc/api/v1/convert", {
+                method: "POST",
+                headers: headers,
+                body: JSON.stringify({
+                    url: "https://www.youtube.com/watch?v=" + videoId,
+                    format: "mp4",
+                    quality: "360p",
+                }),
+            });
+            const d1 = await r1.json();
+            if (d1 && d1.url) return d1.url;
+        } catch (_) {}
+
+        // API publik 2: loader.to
+        try {
+            const r2 = await fetch("https://loader.to/api/ajax/search", {
+                method: "POST",
+                headers: {
+                    ...headers,
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                body: "video_id=" + videoId + "&format=mp4",
+            });
+            const d2 = await r2.json();
+            if (d2 && d2.id) {
+                // Poll loader.to
+                for (let i = 0; i < 10; i++) {
+                    await new Promise(r => setTimeout(r, 2000));
+                    const poll = await fetch(
+                        "https://loader.to/api/progress/?callback=&id=" + d2.id,
+                        {headers}
+                    );
+                    const pd = await poll.text();
+                    const match = pd.match(/"download_url":"([^"]+)"/);
+                    if (match && match[1]) return match[1].replace(/\\\//g, "/");
+                }
+            }
+        } catch (_) {}
+
+        return null;
     } catch (e) {
         return null;
     }

@@ -1,0 +1,9 @@
+{
+  "name": "web-downloader",
+  "version": "1.0.0",
+  "dependencies": {
+    "axios": "^1.7.0",
+    "cheerio": "^1.0.0",
+    "crypto": "^1.0.1"
+  }
+}

@@ -3,106 +3,57 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Video Downloader</title>
+    <title>All Video Downloader</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
         body {
             min-height: 100vh;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            display: flex; align-items: center; justify-content: center;
             padding: 20px;
         }
         .container {
-            background: white;
-            border-radius: 20px;
-            padding: 40px;
-            max-width: 600px;
-            width: 100%;
+            background: white; border-radius: 20px; padding: 40px;
+            max-width: 600px; width: 100%;
             box-shadow: 0 20px 60px rgba(0,0,0,0.3);
         }
-        h1 {
-            color: #333;
-            margin-bottom: 10px;
-            font-size: 28px;
-        }
-        .subtitle {
-            color: #666;
-            margin-bottom: 30px;
-            font-size: 14px;
-        }
-        .input-group {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
+        h1 { color: #333; margin-bottom: 10px; font-size: 26px; }
+        .subtitle { color: #666; margin-bottom: 25px; font-size: 14px; }
+        .input-group { display: flex; gap: 10px; margin-bottom: 20px; }
         input {
-            flex: 1;
-            padding: 15px;
-            border: 2px solid #e0e0e0;
-            border-radius: 10px;
-            font-size: 14px;
-            outline: none;
-            transition: border 0.3s;
+            flex: 1; padding: 15px; border: 2px solid #e0e0e0;
+            border-radius: 10px; font-size: 14px; outline: none;
         }
         input:focus { border-color: #667eea; }
         button {
-            padding: 15px 30px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 10px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.2s;
+            padding: 15px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; border: none; border-radius: 10px;
+            font-size: 14px; font-weight: 600; cursor: pointer;
         }
-        button:hover { transform: translateY(-2px); }
         button:disabled { opacity: 0.6; cursor: not-allowed; }
-        .result {
-            margin-top: 20px;
-            padding: 20px;
-            border-radius: 10px;
-            background: #f5f5f5;
-            display: none;
-        }
+        .platforms { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; font-size: 12px; }
+        .platforms span { padding: 5px 12px; background: #f0f0f0; border-radius: 20px; color: #666; }
+        .result { margin-top: 20px; padding: 20px; border-radius: 10px; background: #f8f9fa; display: none; }
         .result.show { display: block; }
+        .result img { max-width: 100%; border-radius: 10px; margin-bottom: 15px; }
         .result a {
-            display: inline-block;
-            margin-top: 10px;
-            padding: 12px 24px;
-            background: #10b981;
-            color: white;
-            text-decoration: none;
-            border-radius: 8px;
-            font-weight: 600;
+            display: block; margin-top: 10px; padding: 15px;
+            background: #10b981; color: white; text-decoration: none;
+            border-radius: 8px; font-weight: 600; text-align: center;
         }
+        .result a.hd { background: #ef4444; }
         .loading { display: none; margin-top: 20px; text-align: center; color: #667eea; }
         .loading.show { display: block; }
-        .error { color: #ef4444; margin-top: 10px; }
-        .platforms {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            margin-top: 20px;
-            font-size: 12px;
-            color: #888;
-        }
-        .platforms span {
-            padding: 5px 10px;
-            background: #f0f0f0;
-            border-radius: 20px;
-        }
+        .error { color: #ef4444; margin-top: 10px; font-size: 14px; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🎬 Video Downloader</h1>
-        <p class="subtitle">Download video dari TikTok, YouTube, Instagram, dll</p>
+        <h1>🎬 All Video Downloader</h1>
+        <p class="subtitle">Download video dari berbagai platform</p>
 
         <div class="input-group">
-            <input type="text" id="urlInput" placeholder="Paste link video di sini...">
+            <input type="text" id="urlInput" placeholder="Paste link video...">
             <button id="downloadBtn" onclick="download()">Download</button>
         </div>
 
@@ -111,22 +62,31 @@
             <span>✓ YouTube</span>
             <span>✓ Instagram</span>
             <span>✓ Facebook</span>
+            <span>✓ Twitter</span>
         </div>
 
-        <div class="loading" id="loading">
-            <p>⏳ Sedang memproses...</p>
-        </div>
+        <div class="loading" id="loading"><p>⏳ Sedang memproses...</p></div>
 
         <div class="result" id="result">
-            <p><strong>✅ Berhasil!</strong></p>
-            <p id="resultTitle"></p>
-            <a id="resultLink" href="#" target="_blank">📥 Download Video</a>
+            <img id="thumb" src="" alt="">
+            <p id="title" style="font-weight:600; margin-bottom:15px;"></p>
+            <div id="downloads"></div>
         </div>
 
         <p class="error" id="error"></p>
     </div>
 
     <script>
+        function detectPlatform(url) {
+            const u = url.toLowerCase();
+            if (u.includes('tiktok')) return 'tiktok';
+            if (u.includes('youtube') || u.includes('youtu.be')) return 'youtube';
+            if (u.includes('instagram')) return 'instagram';
+            if (u.includes('facebook') || u.includes('fb.watch')) return 'facebook';
+            if (u.includes('twitter') || u.includes('x.com')) return 'twitter';
+            return null;
+        }
+
         async function download() {
             const url = document.getElementById('urlInput').value.trim();
             const btn = document.getElementById('downloadBtn');
@@ -134,10 +94,10 @@
             const result = document.getElementById('result');
             const error = document.getElementById('error');
 
-            if (!url) {
-                error.textContent = '❌ Masukkan link dulu!';
-                return;
-            }
+            if (!url) { error.textContent = '❌ Masukkan link!'; return; }
+
+            const platform = detectPlatform(url);
+            if (!platform) { error.textContent = '❌ Platform tidak didukung!'; return; }
 
             btn.disabled = true;
             loading.classList.add('show');
@@ -145,39 +105,37 @@
             error.textContent = '';
 
             try {
-                // Ganti endpoint ini sesuai API yang Tuan punya
-                const apiUrl = 'https://sylvatica.my.id/api/download/aio?url=' + encodeURIComponent(url) + '&apikey=sylva-2b57116f727397bda36aea5add95ed8e';
-                
-                const response = await fetch(apiUrl);
-                const data = await response.json();
+                const response = await fetch(`/api/${platform}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({url})
+                });
 
+                const data = await response.json();
                 loading.classList.remove('show');
 
-                // Cek struktur response
-                let videoUrl = null;
-                let title = 'Video';
+                if (data.status && data.result) {
+                    if (data.result.thumbnail) document.getElementById('thumb').src = data.result.thumbnail;
+                    document.getElementById('title').textContent = data.result.title || '';
 
-                if (data.video) videoUrl = data.video;
-                else if (data.url) videoUrl = data.url;
-                else if (data.download) videoUrl = data.download;
-                else if (data.data && data.data.video) {
-                    videoUrl = data.data.video;
-                    title = data.data.title || title;
-                }
-
-                if (videoUrl) {
-                    document.getElementById('resultTitle').textContent = title;
-                    document.getElementById('resultLink').href = videoUrl;
+                    const dl = document.getElementById('downloads');
+                    dl.innerHTML = '';
+                    data.result.downloads.forEach(d => {
+                        const a = document.createElement('a');
+                        a.href = d.url;
+                        a.textContent = '📥 Download ' + (d.quality || 'Video');
+                        a.target = '_blank';
+                        if (d.quality === 'HD') a.classList.add('hd');
+                        dl.appendChild(a);
+                    });
                     result.classList.add('show');
                 } else {
-                    error.textContent = '❌ Video tidak ditemukan. Coba link lain.';
+                    error.textContent = '❌ ' + (data.message || 'Gagal');
                 }
-
             } catch (err) {
                 loading.classList.remove('show');
                 error.textContent = '❌ Error: ' + err.message;
             }
-
             btn.disabled = false;
         }
     </script>

@@ -49,11 +49,11 @@
 </head>
 <body>
     <div class="container">
-        <h1>🎬 All Video Downloader</h1>
-        <p class="subtitle">Download video dari berbagai platform</p>
+        <h1>🎬 All Media Downloader</h1>
+        <p class="subtitle">Download video & audio dari berbagai platform</p>
 
         <div class="input-group">
-            <input type="text" id="urlInput" placeholder="Paste link video...">
+            <input type="text" id="urlInput" placeholder="Paste link video/audio...">
             <button id="downloadBtn" onclick="download()">Download</button>
         </div>
 
@@ -63,6 +63,7 @@
             <span>✓ Instagram</span>
             <span>✓ Facebook</span>
             <span>✓ Twitter</span>
+            <span>✓ SoundCloud</span>
         </div>
 
         <div class="loading" id="loading"><p>⏳ Sedang memproses...</p></div>
@@ -84,6 +85,7 @@
             if (u.includes('instagram')) return 'instagram';
             if (u.includes('facebook') || u.includes('fb.watch')) return 'facebook';
             if (u.includes('twitter') || u.includes('x.com')) return 'twitter';
+            if (u.includes('soundcloud.com')) return 'soundcloud';
             return null;
         }
 
@@ -115,7 +117,12 @@
                 loading.classList.remove('show');
 
                 if (data.status && data.result) {
-                    if (data.result.thumbnail) document.getElementById('thumb').src = data.result.thumbnail;
+                    if (data.result.thumbnail) {
+                        document.getElementById('thumb').src = data.result.thumbnail;
+                        document.getElementById('thumb').style.display = 'block';
+                    } else {
+                        document.getElementById('thumb').style.display = 'none';
+                    }
                     document.getElementById('title').textContent = data.result.title || '';
 
                     const dl = document.getElementById('downloads');
@@ -123,9 +130,10 @@
                     data.result.downloads.forEach(d => {
                         const a = document.createElement('a');
                         a.href = d.url;
-                        a.textContent = '📥 Download ' + (d.quality || 'Video');
+                        const label = d.quality ? `Download ${d.quality}` : 'Download';
+                        a.textContent = '📥 ' + label;
                         a.target = '_blank';
-                        if (d.quality === 'HD') a.classList.add('hd');
+                        if (d.quality && d.quality.includes('HD')) a.classList.add('hd');
                         dl.appendChild(a);
                     });
                     result.classList.add('show');

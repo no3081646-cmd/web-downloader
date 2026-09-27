@@ -25,28 +25,88 @@ async function scrapeFacebook(url) {
     try {
         const ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
 
-        // Step 1: Resolve redirect (fb.watch → full URL)
+        // Step 1: Resolve redirect
         let fullUrl = url;
         try {
             const r = await fetch(url, {headers: {"User-Agent": ua}, redirect: 'follow'});
             fullUrl = r.url || url;
         } catch (_) {}
 
-        // Step 2: Coba snapsave.app
-        let downloads = await trySnapSave(fullUrl, ua);
+        // Step 2: Init session — ambil cookie
+        const initRes = await fetch("https://snapsave.app/id", {
+            headers: {
+                "User-Agent": ua,
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "id-ID,id;q=0.9,en;q=0.8",
+            },
+        });
+        
+        // Ambil cookie dari header set-cookie
+        const setCookieArr = initRes.headers.getSetCookie ? initRes.headers.getSetCookie() : [];
+        const cookieStr = setCookieArr.map(c => c.split(";")[0]).join("; ");
+        
+        console.log("[FB] Cookie:", cookieStr);
+        
+        // Step 3: Submit URL pake cookie
+        const params = new URLSearchParams();
+        params.append("url", fullUrl);
 
-        // Step 3: Kalo gagal, coba getfvid.com
-        if (downloads.length === 0) {
-            downloads = await tryGetFvid(fullUrl, ua);
+        const postRes = await fetch("https://snapsave.app/action.php?lang=id", {
+            method: "POST",
+            headers: {
+                "User-Agent": ua,
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Origin": "https://snapsave.app",
+                "Referer": "https://snapsave.app/id",
+                "Cookie": cookieStr,
+                "Accept": "application/json, text/plain, */*",
+                "X-Requested-With": "XMLHttpRequest",
+                "Accept-Language": "id-ID,id;q=0.9,en;q=0.8",
+            },
+            body: params.toString(),
+        });
+
+        let html = await postRes.text();
+        console.log("[FB] Response length:", html.length);
+
+        // Step 4: Decode eval
+        if (html.includes("eval(function")) {
+            html = decodeEval(html);
         }
 
-        // Step 4: Kalo gagal, coba snapsave.app alternatif (mobile API)
-        if (downloads.length === 0) {
-            downloads = await trySnapSaveMobile(fullUrl, ua);
+        // Step 5: Extract URL download pake regex
+        const downloads = [];
+        const seen = new Set();
+
+        // Regex cari URL video
+        const patterns = [
+            /href="(https?:\/\/[^"]*fbcdn[^"]*)"/gi,
+            /href="(https?:\/\/[^"]*\.mp4[^"]*)"/gi,
+            /href="(https?:\/\/[^"]*video[^"]*\.mp4[^"]*)"/gi,
+            /(https?:\/\/[^"'\s]*fbcdn[^"'\s]*\.mp4[^"'\s]*)/gi,
+            /href="(https?:\/\/scontent[^"]*)"/gi,
+        ];
+
+        for (const regex of patterns) {
+            let match;
+            while ((match = regex.exec(html)) !== null) {
+                const u = match[1] || match[0];
+                if (!seen.has(u) && u.startsWith('http') && !u.includes('snapsave.app')) {
+                    seen.add(u);
+                    downloads.push({
+                        type: "video",
+                        quality: downloads.length === 0 ? "HD" : "SD",
+                        url: u,
+                    });
+                }
+            }
         }
 
         if (downloads.length === 0) {
-            return {status: false, message: 'Gak nemu link download. Video mungkin private.'};
+            return {
+                status: false,
+                message: 'Gak nemu link download. Coba link FB lain.',
+            };
         }
 
         return {
@@ -65,158 +125,7 @@ async function scrapeFacebook(url) {
 }
 
 
-// ===== OPSI 1: SnapSave =====
-async function trySnapSave(url, ua) {
-    try {
-        // Init
-        const initRes = await fetch("https://snapsave.app/id", {
-            headers: {"User-Agent": ua},
-        });
-        const setCookie = initRes.headers.getSetCookie ? initRes.headers.getSetCookie() : [];
-        const cookieStr = setCookie.map(c => c.split(";")[0]).join("; ");
-
-        // Post
-        const params = new URLSearchParams();
-        params.append("url", url);
-
-        const postRes = await fetch("https://snapsave.app/action.php?lang=id", {
-            method: "POST",
-            headers: {
-                "User-Agent": ua,
-                "Content-Type": "application/x-www-form-urlencoded",
-                "Origin": "https://snapsave.app",
-                "Referer": "https://snapsave.app/id",
-                "Cookie": cookieStr,
-            },
-            body: params.toString(),
-        });
-
-        let html = await postRes.text();
-
-        // Decode kalo ada eval(function...
-        if (html.includes("eval(function")) {
-            html = decodeEval(html);
-        }
-
-        // Extract link pake regex (gak pake cheerio — lebih fleksibel)
-        const downloads = [];
-        const seen = new Set();
-
-        // Regex cari URL download
-        const urlRegex = /href="(https?:\/\/[^"]*(?:rapidcdn|snapcdn|fbcdn|video)[^"]*)"/gi;
-        let match;
-        while ((match = urlRegex.exec(html)) !== null) {
-            const u = match[1];
-            if (!seen.has(u) && !u.includes('snapsave.app') && !u.includes('play.google.com')) {
-                seen.add(u);
-                downloads.push({
-                    type: "video",
-                    quality: downloads.length === 0 ? "HD" : "SD",
-                    url: u,
-                });
-            }
-        }
-
-        // Kalo gak ada, cari yg pake https:// apapun
-        if (downloads.length === 0) {
-            const genericRegex = /href="(https?:\/\/[^"]+)"/gi;
-            while ((match = genericRegex.exec(html)) !== null) {
-                const u = match[1];
-                if (!seen.has(u) && !u.includes('snapsave.app') && !u.includes('play.google.com') && !u.includes('facebook.com')) {
-                    seen.add(u);
-                    downloads.push({type: "video", quality: "HD", url: u});
-                }
-            }
-        }
-
-        return downloads;
-    } catch (e) {
-        return [];
-    }
-}
-
-
-// ===== OPSI 2: GetFvid =====
-async function tryGetFvid(url, ua) {
-    try {
-        const params = new URLSearchParams();
-        params.append("url", url);
-
-        const r = await fetch("https://www.getfvid.com/downloader", {
-            method: "POST",
-            headers: {
-                "User-Agent": ua,
-                "Content-Type": "application/x-www-form-urlencoded",
-                "Origin": "https://www.getfvid.com",
-                "Referer": "https://www.getfvid.com/",
-            },
-            body: params.toString(),
-        });
-
-        const html = await r.text();
-
-        const downloads = [];
-        const seen = new Set();
-        const urlRegex = /href="(https?:\/\/[^"]*(?:fbcdn|video|mp4)[^"]*)"/gi;
-        let match;
-        while ((match = urlRegex.exec(html)) !== null) {
-            const u = match[1];
-            if (!seen.has(u) && !u.includes('getfvid.com')) {
-                seen.add(u);
-                downloads.push({
-                    type: "video",
-                    quality: downloads.length === 0 ? "HD" : "SD",
-                    url: u,
-                });
-            }
-        }
-        return downloads;
-    } catch (e) {
-        return [];
-    }
-}
-
-
-// ===== OPSI 3: SnapSave Mobile API =====
-async function trySnapSaveMobile(url, ua) {
-    try {
-        const params = new URLSearchParams();
-        params.append("url", url);
-
-        const r = await fetch("https://snapsave.app/action.php", {
-            method: "POST",
-            headers: {
-                "User-Agent": ua,
-                "Content-Type": "application/x-www-form-urlencoded",
-                "Origin": "https://snapsave.app",
-                "Referer": "https://snapsave.app/",
-                "X-Requested-With": "XMLHttpRequest",
-            },
-            body: params.toString(),
-        });
-
-        const text = await r.text();
-
-        // SnapSave kadang balikin JSON
-        try {
-            const json = JSON.parse(text);
-            if (json && json.data && Array.isArray(json.data)) {
-                return json.data.map((d, i) => ({
-                    type: "video",
-                    quality: d.label || (i === 0 ? "HD" : "SD"),
-                    url: d.url,
-                }));
-            }
-        } catch (_) {}
-
-        return [];
-    } catch (e) {
-        return [];
-    }
-}
-
-
-// ===== Helper: Decode eval(function...) =====
+// Decode eval(function...)
 function decodeEval(data) {
     try {
         const regex = /eval\(function\(h,u,n,t,e,r\)\{.*?\}\("(.*?)",(\d+),"(.*?)",(\d+),(\d+),(\d+)\)\)/;
